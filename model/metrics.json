@@ -1,0 +1,10 @@
+{
+  "reference_naive": {
+    "accuracy": 0.0455,
+    "f1_macro": 0.004
+  },
+  "random_forest": {
+    "accuracy": 0.9955,
+    "f1_macro": 0.9955
+  }
+}
