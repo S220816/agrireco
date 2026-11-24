@@ -1,0 +1,19 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "FUNCTIONS_WORKER_RUNTIME": "python",
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "AGRI_STORAGE": "UseDevelopmentStorage=true",
+    "BLOB_TRIGGER_SOURCE": "LogsAndContainerScan",
+    "QUEUE_NAME": "predictions",
+    "API_URL": "http://localhost:8000",
+    "API_TIMEOUT_SECONDS": "30",
+    "COSMOS_ENDPOINT": "",
+    "COSMOS_DATABASE": "agrireco",
+    "COSMOS_CONTAINER": "predictions",
+    "LOCAL_STORE_PATH": "local_results.json"
+  },
+  "Host": {
+    "CORS": "*"
+  }
+}
