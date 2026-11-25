@@ -11,7 +11,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 WORKDIR /app
 COPY --from=build /install /usr/local
 COPY app/ app/
-COPY model-1.0.0.joblib .
+COPY model-1.0.0.joblib VERSION ./
 RUN useradd --create-home appuser
 USER appuser
 EXPOSE 8000

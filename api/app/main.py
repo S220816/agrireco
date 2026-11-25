@@ -12,7 +12,7 @@ from fastapi import FastAPI
 from opentelemetry import metrics
 from pydantic import BaseModel, Field
 
-API_VERSION = '1.0.0'
+API_VERSION = open(os.path.join(os.path.dirname(__file__), '..', 'VERSION')).read().strip()
 
 # Chargement du modele au demarrage, en mesurant le temps
 t0 = time.time()
