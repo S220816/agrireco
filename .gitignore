@@ -5,3 +5,6 @@ local.settings.json
 __azurite_db*
 __blobstorage__/
 __queuestorage__/
+.venv/
+__pycache__/
+.pytest_cache/
