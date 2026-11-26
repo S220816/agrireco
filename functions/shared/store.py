@@ -48,8 +48,18 @@ def blob_service():
     return _blob_service
 
 
-def read_blob(container: str, name: str) -> bytes:
-    return blob_service().get_blob_client(container, name).download_blob().readall()
+def read_blob(container: str, name: str, etag: str | None = None) -> bytes | None:
+    """Lit un blob. Avec etag : renvoie None si le blob a été remplacé depuis (autre version)."""
+    client = blob_service().get_blob_client(container, name)
+    if not etag:
+        return client.download_blob().readall()
+    from azure.core import MatchConditions
+    from azure.core.exceptions import ResourceModifiedError
+
+    try:
+        return client.download_blob(etag=etag, match_condition=MatchConditions.IfNotModified).readall()
+    except ResourceModifiedError:
+        return None
 
 
 def write_blob(container: str, name: str, data: bytes, content_type: str = "text/csv") -> None:
@@ -120,7 +130,7 @@ class CosmosStore:
     def recent(self, limit: int) -> list[dict]:
         query = (
             "SELECT TOP @n c.id, c.fileName, c.field_id, c.crop, c.confidence, c.status, "
-            "c.model_version, c.latency_ms, c.processed_at, c.error FROM c ORDER BY c.processed_at DESC"
+            "c.model_version, c.latency_ms, c.processed_at, c.error, c.etag, c.row FROM c ORDER BY c.processed_at DESC"
         )
         return list(
             self.container.query_items(

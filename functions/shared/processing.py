@@ -1,6 +1,7 @@
 """Logique du worker, séparée d'Azure Functions pour pouvoir la tester."""
 import csv
 import io
+import json
 import logging
 import os
 
@@ -13,13 +14,25 @@ RESULT_COLUMNS = [ID_COLUMN] + MEASURE_COLUMNS + [
 ]
 
 
-def doc_id(file_name: str, row_index: int) -> str:
-    """Identifiant fixe : si le message est rejoué, on remplace au lieu de dupliquer."""
-    safe = file_name.replace("/", "_").replace("\\", "_").replace("?", "_").replace("#", "_")
-    return f"{safe}-{row_index}"
+def _safe(text: str) -> str:
+    """Cosmos DB interdit / \\ ? # dans un id ; on enlève aussi les guillemets de l'ETag."""
+    for ch in '/\\?#"':
+        text = text.replace(ch, "_" if ch != '"' else "")
+    return text
 
 
-def process_file(file_name: str, data: bytes, store, predict=api_client.predict) -> tuple[list[dict], bytes]:
+def doc_id(file_name: str, etag: str, row_index: int) -> str:
+    """Identifiant fixe = nom du blob + ETag (version) + numéro de ligne.
+
+    Message rejoué -> même id -> upsert remplace au lieu de dupliquer.
+    Nouveau dépôt du même fichier -> nouvel ETag -> nouvelles inférences.
+    """
+    parts = [_safe(file_name)] + ([_safe(etag)] if etag else []) + [str(row_index)]
+    return "-".join(parts)
+
+
+def process_file(file_name: str, data: bytes, store, predict=api_client.predict,
+                 etag: str = "") -> tuple[list[dict], bytes]:
     """Prédit chaque ligne, enregistre les résultats, renvoie (documents, CSV de sortie).
 
     Une erreur autre que 422 remonte : le runtime réessaie le message
@@ -29,8 +42,9 @@ def process_file(file_name: str, data: bytes, store, predict=api_client.predict)
     docs = []
     for i, row in enumerate(rows, start=1):
         doc = {
-            "id": doc_id(file_name, i),
+            "id": doc_id(file_name, etag, i),
             "fileName": file_name,
+            "etag": etag,
             "row": i,
             ID_COLUMN: row[ID_COLUMN],
             "inputs": {c: row[c] for c in MEASURE_COLUMNS},
@@ -57,6 +71,16 @@ def process_file(file_name: str, data: bytes, store, predict=api_client.predict)
     for d in docs:
         writer.writerow({**d["inputs"], **d, "error": d.get("error", "")})
     return docs, out.getvalue().encode("utf-8")
+
+
+def json_name(doc: dict) -> str:
+    """output/<fichier sans .csv>/<id>.json : un JSON complet par inférence."""
+    base = doc["fileName"][:-4] if doc["fileName"].lower().endswith(".csv") else doc["fileName"]
+    return f"{base}/{doc['id']}.json"
+
+
+def to_json(doc: dict) -> bytes:
+    return json.dumps(doc, ensure_ascii=False, indent=2).encode("utf-8")
 
 
 def output_name(file_name: str) -> str:

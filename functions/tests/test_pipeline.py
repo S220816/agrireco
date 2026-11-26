@@ -1,5 +1,4 @@
 import json
-import os
 import sys
 from pathlib import Path
 
@@ -133,3 +132,72 @@ def test_api_500_raises(monkeypatch):
 def test_function_app_indexes_three_functions():
     import function_app
     assert sorted(f.get_function_name() for f in function_app.app.get_functions()) == ["dispatcher", "recent", "worker"]
+
+
+# ---------------- identifiant : nom du blob + ETag + ligne
+def test_id_uses_blob_name_etag_and_row(tmp_path):
+    store = LocalStore(str(tmp_path / "r.json"))
+    docs, _ = processing.process_file("coop/f.csv", GOOD, store, predict=fake_predict, etag='"0x8DCABC"')
+    assert docs[0]["id"] == "coop_f.csv-0x8DCABC-1"
+    assert docs[0]["etag"] == '"0x8DCABC"'
+
+
+def test_new_version_of_same_file_is_a_new_inference(tmp_path):
+    store = LocalStore(str(tmp_path / "r.json"))
+    processing.process_file("f.csv", GOOD, store, predict=fake_predict, etag='"v1"')
+    processing.process_file("f.csv", GOOD, store, predict=fake_predict, etag='"v1"')  # rejeu
+    processing.process_file("f.csv", GOOD, store, predict=fake_predict, etag='"v2"')  # nouveau dépôt
+    assert len(store.recent(10)) == 2
+
+
+def test_json_output_per_inference(tmp_path):
+    docs, _ = processing.process_file("ferme.csv", GOOD, LocalStore(str(tmp_path / "r.json")),
+                                      predict=fake_predict, etag='"e1"')
+    assert processing.json_name(docs[0]) == "ferme/ferme.csv-e1-1.json"
+    body = json.loads(processing.to_json(docs[0]))
+    assert body["crop"] == "rice" and body["inputs"]["ph"] == 6.5 and body["etag"] == '"e1"'
+
+
+# ---------------- api_client : un seul requests.Session réutilisé
+def test_session_is_created_once():
+    assert api_client.get_session() is api_client.get_session()
+
+
+# ---------------- dispatcher : lecture de l'événement Event Grid
+def _event(subject, event_type="Microsoft.Storage.BlobCreated"):
+    import datetime
+
+    import azure.functions as func
+    return func.EventGridEvent(
+        id="1", data={"eTag": '"0x1"', "contentLength": 120, "url": "https://x/input/f.csv"},
+        topic="t", subject=subject, event_type=event_type,
+        event_time=datetime.datetime(2026, 11, 26, tzinfo=datetime.timezone.utc), data_version="1",
+    )
+
+
+def test_event_grid_blob_created_in_input():
+    import function_app
+    info = function_app.blob_event(_event("/blobServices/default/containers/input/blobs/coop/f.csv"))
+    assert info["blob"] == "coop/f.csv" and info["etag"] == '"0x1"' and info["size"] == 120
+
+
+@pytest.mark.parametrize("subject,etype", [
+    ("/blobServices/default/containers/output/blobs/f.csv", "Microsoft.Storage.BlobCreated"),
+    ("/blobServices/default/containers/input/blobs/f.csv", "Microsoft.Storage.BlobDeleted"),
+])
+def test_other_events_are_ignored(subject, etype):
+    import function_app
+    assert function_app.blob_event(_event(subject, etype)) is None
+
+
+def test_recent_returns_20_by_default(tmp_path, monkeypatch):
+    import azure.functions as func
+
+    import function_app
+    from shared import store as store_mod
+    s = LocalStore(str(tmp_path / "r.json"))
+    for i in range(25):
+        s.upsert({"id": str(i), "processed_at": f"2026-11-26T10:{i:02d}:00+00:00"})
+    monkeypatch.setattr(store_mod, "_store", s)
+    body = json.loads(function_app.recent(func.HttpRequest("GET", "/api/recent", body=b"")).get_body())
+    assert body["count"] == 20 and body["items"][0]["id"] == "24"

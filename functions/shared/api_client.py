@@ -16,6 +16,17 @@ from .validation import MEASURE_COLUMNS
 TIMEOUT_S = float(os.getenv("API_TIMEOUT_SECONDS", "30"))
 
 
+_session = None
+
+
+def get_session() -> requests.Session:
+    """Un seul client HTTP, créé une fois et réutilisé pour toutes les lignes (connexions gardées ouvertes)."""
+    global _session
+    if _session is None:
+        _session = requests.Session()
+    return _session
+
+
 class InvalidMeasure(Exception):
     """L'API a répondu 422 : la ligne est invalide, inutile de réessayer."""
 
@@ -30,7 +41,7 @@ def predict(row: dict, session=None) -> dict:
     """
     base = os.environ["API_URL"].rstrip("/")
     payload = {c: row[c] for c in MEASURE_COLUMNS}
-    http = session or requests
+    http = session or get_session()
     resp = http.post(f"{base}/predict", json=payload, timeout=TIMEOUT_S)
     if resp.status_code == 422:
         raise InvalidMeasure(resp.text[:300])

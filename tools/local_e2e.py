@@ -2,7 +2,7 @@
 
 Il rejoue ce que fait le runtime Azure Functions avec NOS vraies fonctions :
   1. dépose les CSV de samples/ dans input/
-  2. appelle le dispatcher pour chaque fichier (comme Event Grid)
+  2. appelle le dispatcher avec un événement BlobCreated (comme Event Grid)
   3. lit la file et appelle le worker ; après 5 échecs -> file poison
   4. appelle recent (comme le tableau de bord)
 
@@ -10,6 +10,7 @@ Prérequis : azurite lancé, fausse API sur API_URL (voir docs/PIPELINE.md).
 Usage : python tools/local_e2e.py [--fail]   (--fail : l'API est coupée -> test de la file poison)
 """
 import base64
+import datetime
 import json
 import os
 import sys
@@ -29,7 +30,7 @@ import function_app  # noqa: E402
 from shared import store  # noqa: E402
 
 MAX_DEQUEUE = 5  # même valeur que host.json
-QUEUE = os.getenv("QUEUE_NAME", "predictions")
+QUEUE = os.getenv("QUEUE_NAME", "inference-requests")
 CONN = os.environ["AGRI_STORAGE"]
 
 
@@ -84,8 +85,15 @@ def main():
     for f in sorted((ROOT / "samples").glob("*.csv")):
         data = f.read_bytes()
         store.write_blob(store.INPUT_CONTAINER, f.name, data)
+        props = store.blob_service().get_blob_client(store.INPUT_CONTAINER, f.name).get_blob_properties()
+        event = func.EventGridEvent(
+            id=f.name, topic="local", subject=f"/blobServices/default/containers/{store.INPUT_CONTAINER}/blobs/{f.name}",
+            event_type="Microsoft.Storage.BlobCreated", data_version="1",
+            event_time=datetime.datetime.now(datetime.timezone.utc),
+            data={"eTag": props.etag, "contentLength": props.size, "url": f"local/{f.name}"},
+        )
         out = Out()
-        dispatcher(func.blob.InputStream(data=data, name=f"{store.INPUT_CONTAINER}/{f.name}", length=len(data)), out)
+        dispatcher(event, out)
         if out.value:
             queue.send_message(base64.b64encode(out.value.encode()).decode())  # Functions encode en base64
             print(f"   {f.name:24s} -> file d'attente")
@@ -106,13 +114,13 @@ def main():
             try:
                 worker(Msg(body, m.dequeue_count))
                 queue.delete_message(m)
-                print(f"   OK      {json.loads(body)['file']} (essai {m.dequeue_count})")
+                print(f"   OK      {json.loads(body)['blob']} (essai {m.dequeue_count})")
             except Exception as exc:
-                print(f"   ECHEC   {json.loads(body)['file']} (essai {m.dequeue_count}) : {type(exc).__name__}")
+                print(f"   ECHEC   {json.loads(body)['blob']} (essai {m.dequeue_count}) : {type(exc).__name__}")
                 if m.dequeue_count >= MAX_DEQUEUE:
                     poison.send_message(m.content)
                     queue.delete_message(m)
-                    print(f"   POISON  {json.loads(body)['file']} -> {QUEUE}-poison")
+                    print(f"   POISON  {json.loads(body)['blob']} -> {QUEUE}-poison")
 
     print("== 3. état du stockage")
     bs = store.blob_service()
