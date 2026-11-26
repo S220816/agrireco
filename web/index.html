@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AgriReco — recommandations de cultures</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='7' fill='%232e7d32'/%3E%3C/svg%3E">
+<style>
+  :root { --bg:#f6f7f4; --card:#fff; --ink:#1f2a1f; --muted:#5f6b5f; --line:#e2e6df; --ok:#2e7d32; --bad:#b3261e; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; background:var(--bg); color:var(--ink); }
+  header { padding:20px 24px 8px; }
+  h1 { margin:0; font-size:22px; }
+  .sub { color:var(--muted); font-size:14px; margin-top:4px; }
+  main { padding:8px 24px 32px; display:grid; gap:16px; }
+  .tiles { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; }
+  .tile, .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:14px 16px; }
+  .tile .v { font-size:26px; font-weight:600; font-variant-numeric:tabular-nums; }
+  .tile .l { color:var(--muted); font-size:13px; }
+  .grid { display:grid; grid-template-columns: minmax(0,1fr) minmax(0,2fr); gap:16px; }
+  @media (max-width: 860px) { .grid { grid-template-columns: 1fr; } }
+  h2 { margin:0 0 10px; font-size:16px; }
+  table { width:100%; border-collapse:collapse; font-size:14px; }
+  th, td { text-align:left; padding:7px 8px; border-bottom:1px solid var(--line); white-space:nowrap; }
+  th { color:var(--muted); font-weight:500; }
+  td.num { text-align:right; font-variant-numeric:tabular-nums; }
+  .tag { display:inline-block; padding:1px 8px; border-radius:999px; font-size:12px; }
+  .tag.ok { background:#e5f4e4; color:var(--ok); }
+  .tag.invalid { background:#fbebeb; color:var(--bad); }
+  .scroll { overflow-x:auto; }
+  #status { font-size:13px; color:var(--muted); }
+  .bar { display:grid; grid-template-columns: 90px 1fr 32px; align-items:center; gap:8px; margin:6px 0; font-size:14px; }
+  .bar .track { background:#eef1ec; border-radius:4px; height:18px; }
+  .bar .fill { background:var(--ok); height:18px; border-radius:4px; }
+  .bar .n { text-align:right; font-variant-numeric:tabular-nums; }
+  #status.err { color:var(--bad); }
+</style>
+</head>
+<body>
+<header>
+  <h1>AgriReco — recommandations de cultures</h1>
+  <div class="sub">Les analyses de sol déposées dans <code>input/</code> apparaissent ici automatiquement : 20 dernières inférences, actualisation toutes les 30 s. <span id="status">Chargement…</span></div>
+</header>
+<main>
+  <section class="tiles">
+    <div class="tile"><div class="v" id="k-total">–</div><div class="l">inférences (20 dernières)</div></div>
+    <div class="tile"><div class="v" id="k-files">–</div><div class="l">fichiers traités</div></div>
+    <div class="tile"><div class="v" id="k-conf">–</div><div class="l">confiance moyenne</div></div>
+    <div class="tile"><div class="v" id="k-invalid">–</div><div class="l">lignes invalides (422)</div></div>
+  </section>
+  <section class="grid">
+    <div class="card"><h2>Cultures recommandées</h2><div id="chart"><div class="sub">Pas encore de données.</div></div></div>
+    <div class="card"><h2>Derniers résultats</h2>
+      <div class="scroll"><table>
+        <thead><tr><th>Date (UTC)</th><th>Fichier</th><th>Champ</th><th>Culture</th><th class="num">Confiance</th><th>Statut</th><th>Modèle</th></tr></thead>
+        <tbody id="rows"><tr><td colspan="7">Aucun résultat pour l'instant.</td></tr></tbody>
+      </table></div>
+    </div>
+  </section>
+</main>
+<script src="config.js"></script>
+<script>
+const REFRESH_MS = 30000;
+
+function esc(s) { return String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c])); }
+
+function render(items) {
+  const ok = items.filter(d => d.status === "ok");
+  document.getElementById("k-total").textContent = items.length;
+  document.getElementById("k-files").textContent = new Set(items.map(d => d.fileName)).size;
+  document.getElementById("k-invalid").textContent = items.length - ok.length;
+  const avg = ok.length ? ok.reduce((s, d) => s + Number(d.confidence || 0), 0) / ok.length : null;
+  document.getElementById("k-conf").textContent = avg === null ? "–" : Math.round(avg * 100) + " %";
+
+  document.getElementById("rows").innerHTML = items.length ? items.map(d => `
+    <tr><td>${esc((d.processed_at || "").replace("T", " ").slice(0, 19))}</td><td>${esc(d.fileName)}</td>
+    <td>${esc(d.field_id)}</td><td>${esc(d.crop ?? "—")}</td>
+    <td class="num">${d.confidence == null ? "—" : Math.round(d.confidence * 100) + " %"}</td>
+    <td><span class="tag ${d.status === "ok" ? "ok" : "invalid"}">${d.status === "ok" ? "OK" : "invalide"}</span></td>
+    <td>${esc(d.model_version ?? "—")}</td></tr>`).join("") :
+    '<tr><td colspan="7">Aucun résultat pour l\'instant.</td></tr>';
+
+  const counts = {};
+  ok.forEach(d => counts[d.crop] = (counts[d.crop] || 0) + 1);
+  const labels = Object.keys(counts).sort((a, b) => counts[b] - counts[a]);
+  const max = Math.max(1, ...labels.map(l => counts[l]));
+  document.getElementById("chart").innerHTML = labels.length ? labels.map(l => `
+    <div class="bar"><span>${esc(l)}</span><div class="track"><div class="fill" style="width:${(counts[l] / max * 100).toFixed(1)}%"></div></div><span class="n">${counts[l]}</span></div>`).join("") :
+    '<div class="sub">Pas encore de données.</div>';
+}
+
+async function refresh() {
+  const st = document.getElementById("status");
+  try {
+    const r = await fetch(`${window.AGRIRECO_CONFIG.recentUrl}?limit=20`, { cache: "no-store" });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const body = await r.json();
+    render(body.items || []);
+    st.className = ""; st.textContent = "Mis à jour à " + new Date().toLocaleTimeString("fr-FR") + ".";
+  } catch (e) {
+    st.className = "err"; st.textContent = "API injoignable (" + e.message + "), nouvel essai dans 30 s.";
+  }
+}
+refresh();
+setInterval(refresh, REFRESH_MS);
+</script>
+</body>
+</html>

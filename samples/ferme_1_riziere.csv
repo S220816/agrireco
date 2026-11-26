@@ -1,0 +1,4 @@
+field_id,N,P,K,temperature,humidity,ph,rainfall
+F1-parcelle-nord,90,42,43,20.9,82,6.5,202.9
+F1-parcelle-sud,85,58,41,21.8,80.3,7.0,226.7
+F1-parcelle-est,60,55,44,23.0,82.3,7.8,263.9

@@ -1,0 +1,18 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "FUNCTIONS_WORKER_RUNTIME": "python",
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "AGRI_STORAGE": "UseDevelopmentStorage=true",
+    "QUEUE_NAME": "inference-requests",
+    "API_URL": "http://localhost:8000",
+    "API_TIMEOUT_SECONDS": "30",
+    "COSMOS_ENDPOINT": "",
+    "COSMOS_DATABASE": "pipeline",
+    "COSMOS_CONTAINER": "inferences",
+    "LOCAL_STORE_PATH": "local_results.json"
+  },
+  "Host": {
+    "CORS": "*"
+  }
+}

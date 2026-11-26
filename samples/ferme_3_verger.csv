@@ -1,0 +1,4 @@
+field_id,N,P,K,temperature,humidity,ph,rainfall
+F3-verger-a,24,130,195,29.9,81.5,6.1,67.1
+F3-verger-b,13,144,204,30.7,83.1,5.9,74.3
+F3-erreur-labo,30,140,200,25.0,80.0,20.0,70.0
