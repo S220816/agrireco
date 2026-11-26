@@ -1,0 +1,44 @@
+name: ci
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+  packages: write
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Installer les dependances
+        run: pip install ruff -r api/requirements.txt -r api/requirements-dev.txt
+      - name: Lint
+        run: ruff check --select E4,E7,E9,F api
+      - name: Tests de l'API
+        working-directory: api
+        run: python -m pytest -q
+  image:
+    needs: test
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - id: meta
+        run: |
+          echo "repo=${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+          echo "version=$(cat api/VERSION)" >> "$GITHUB_OUTPUT"
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: api
+          push: true
+          tags: |
+            ghcr.io/${{ steps.meta.outputs.repo }}/api:${{ steps.meta.outputs.version }}
+            ghcr.io/${{ steps.meta.outputs.repo }}/api:${{ github.sha }}
