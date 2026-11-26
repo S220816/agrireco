@@ -62,7 +62,7 @@ F1-parcelle-nord,90,42,43,20.9,82,6.5,202.9
 → `200 {"crop": "rice", "confidence": 0.97, "model_version": "1.0.0", "latency_ms": 3.2}`
 → `422` si une mesure est invalide (ex. pH = 20).
 
-**Document Cosmos DB** (base `agrireco`, conteneur `predictions`, clé de partition `/fileName`) :
+**Document Cosmos DB** (base `pipeline`, conteneur `inferences`, clé de partition `/fileName`) :
 
 ```json
 {"id": "ferme_1.csv-0x8DD0F3A1B2C4E5F-1", "fileName": "ferme_1.csv", "etag": "\"0x8DD0F3A1B2C4E5F\"", "row": 1, "field_id": "F1-parcelle-nord",
@@ -88,7 +88,7 @@ F1-parcelle-nord,90,42,43,20.9,82,6.5,202.9
 | `AGRI_STORAGE` | chaîne de connexion | seulement si pas d'identité managée (réglage, jamais Git) |
 | `API_URL` | URL Container Apps de A (fausse API au début) | |
 | `COSMOS_ENDPOINT` | `https://<compte>.documents.azure.com:443/` | |
-| `COSMOS_DATABASE` / `COSMOS_CONTAINER` | `agrireco` / `predictions` | |
+| `COSMOS_DATABASE` / `COSMOS_CONTAINER` | `pipeline` / `inferences` | |
 | `COSMOS_KEY` | clé Cosmos | seulement si pas de rôle RBAC Cosmos |
 | `QUEUE_NAME` | `inference-requests` | file poison : `inference-requests-poison` (automatique) |
 
@@ -106,8 +106,8 @@ az storage container create --account-name <st> -n output --auth-mode login
 az storage blob service-properties update --account-name <st> --static-website --index-document index.html --auth-mode login
 
 # 2. Cosmos DB (créé par C en Free Tier) : base + conteneur
-az cosmosdb sql database create -g <rg> -a <cosmos> -n agrireco
-az cosmosdb sql container create -g <rg> -a <cosmos> -d agrireco -n predictions --partition-key-path /fileName
+az cosmosdb sql database create -g <rg> -a <cosmos> -n pipeline
+az cosmosdb sql container create -g <rg> -a <cosmos> -d pipeline -n inferences --partition-key-path /fileName
 
 # 3. Event Grid -> dispatcher (après le premier déploiement des fonctions)
 #    filtré : BlobCreated uniquement, dossier input/ uniquement

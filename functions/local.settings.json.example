@@ -8,8 +8,8 @@
     "API_URL": "http://localhost:8000",
     "API_TIMEOUT_SECONDS": "30",
     "COSMOS_ENDPOINT": "",
-    "COSMOS_DATABASE": "agrireco",
-    "COSMOS_CONTAINER": "predictions",
+    "COSMOS_DATABASE": "pipeline",
+    "COSMOS_CONTAINER": "inferences",
     "LOCAL_STORE_PATH": "local_results.json"
   },
   "Host": {

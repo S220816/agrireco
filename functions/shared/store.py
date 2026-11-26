@@ -10,7 +10,7 @@ Blob :
 Cosmos DB :
   - COSMOS_ENDPOINT + identité managée (rôle « Cosmos DB Built-in Data Contributor »),
     ou COSMOS_ENDPOINT + COSMOS_KEY (réglage de l'app, jamais dans Git)
-  - COSMOS_DATABASE (défaut agrireco), COSMOS_CONTAINER (défaut predictions)
+  - COSMOS_DATABASE (défaut pipeline), COSMOS_CONTAINER (défaut inferences)
   - sans COSMOS_ENDPOINT : stockage local dans un fichier JSON (développement)
 """
 import json
@@ -121,8 +121,8 @@ class CosmosStore:
             from azure.identity import DefaultAzureCredential
 
             client = CosmosClient(endpoint, credential=DefaultAzureCredential())
-        db = client.get_database_client(os.getenv("COSMOS_DATABASE", "agrireco"))
-        self.container = db.get_container_client(os.getenv("COSMOS_CONTAINER", "predictions"))
+        db = client.get_database_client(os.getenv("COSMOS_DATABASE", "pipeline"))
+        self.container = db.get_container_client(os.getenv("COSMOS_CONTAINER", "inferences"))
 
     def upsert(self, doc: dict) -> None:
         self.container.upsert_item(doc)
