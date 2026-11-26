@@ -16,7 +16,7 @@ jobs:
       - name: Installer les dependances
         run: pip install ruff -r api/requirements.txt -r api/requirements-dev.txt
       - name: Lint
-        run: ruff check api
+        run: ruff check --select E4,E7,E9,F api
       - name: Tests de l'API
         working-directory: api
         run: python -m pytest -q
