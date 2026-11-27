@@ -14,12 +14,14 @@ jobs:
         with:
           python-version: "3.12"
       - name: Installer les dependances
-        run: pip install ruff -r api/requirements.txt -r api/requirements-dev.txt
+        run: pip install ruff pytest -r api/requirements.txt -r api/requirements-dev.txt -r functions/requirements.txt
       - name: Lint
-        run: ruff check --select E4,E7,E9,F api
-      - name: Tests de l'API
+        run: ruff check --select E4,E7,E9,F api functions
+      - name: Tests de l'API (partie A)
         working-directory: api
         run: python -m pytest -q
+      - name: Tests du pipeline (partie B)
+        run: python -m pytest -q functions/tests
   image:
     needs: test
     if: github.event_name == 'push'
