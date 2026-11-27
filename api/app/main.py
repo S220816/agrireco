@@ -1,16 +1,35 @@
+import logging
 import os
 import time
 
-# TELEMETRIE : active l'envoi vers Application Insights seulement sur Azure
-if os.getenv('APPLICATIONINSIGHTS_CONNECTION_STRING'):
-    from azure.monitor.opentelemetry import configure_azure_monitor
-    configure_azure_monitor()
-
+import fastapi
 import joblib
 import pandas as pd
-from fastapi import FastAPI
 from opentelemetry import metrics
 from pydantic import BaseModel, Field
+
+# TELEMETRIE : active l'envoi vers Application Insights seulement sur Azure.
+# Une erreur de telemetrie (chaine de connexion mal formee, exportateur
+# indisponible) ne doit jamais empecher l'API de demarrer.
+TELEMETRY_ENABLED = False
+_conn = os.getenv('APPLICATIONINSIGHTS_CONNECTION_STRING', '').strip().strip('"').strip("'")
+if _conn:
+    try:
+        from azure.monitor.opentelemetry import configure_azure_monitor
+        # Configuration allegee pour 0,25 vCPU : pas de live metrics ni de
+        # compteurs de performance, et seulement les instrumentations utiles.
+        configure_azure_monitor(
+            connection_string=_conn,
+            enable_live_metrics=False,
+            enable_performance_counters=False,
+            instrumentation_options={
+                name: {'enabled': False}
+                for name in ('azure_sdk', 'django', 'flask', 'psycopg2', 'requests', 'urllib', 'urllib3')
+            },
+        )
+        TELEMETRY_ENABLED = True
+    except Exception as exc:  # noqa: BLE001
+        logging.getLogger('agrireco').error('Telemetrie desactivee : %s', exc)
 
 API_VERSION = open(os.path.join(os.path.dirname(__file__), '..', 'VERSION')).read().strip()
 
@@ -26,7 +45,7 @@ meter = metrics.get_meter('agrireco.api')
 inference_counter = meter.create_counter('inferences', description='Nombre de predictions')
 latency_histogram = meter.create_histogram('model_latency_ms', unit='ms', description='Temps de calcul du modele')
 
-app = FastAPI(title='AgriReco API', version=API_VERSION)
+app = fastapi.FastAPI(title='AgriReco API', version=API_VERSION)
 
 
 class Soil(BaseModel):
@@ -42,7 +61,7 @@ class Soil(BaseModel):
 
 @app.get('/health')
 def health():
-    return {'status': 'ok', 'model_load_seconds': LOAD_SECONDS}
+    return {'status': 'ok', 'model_load_seconds': LOAD_SECONDS, 'telemetry': TELEMETRY_ENABLED}
 
 
 @app.get('/version')
